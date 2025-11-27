@@ -5,16 +5,27 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# ------------------ CONFIG ------------------ #
 sns.set(style="whitegrid", context="talk")
 plt.rcParams["figure.figsize"] = (12, 6)
 warnings.filterwarnings("ignore")
 
+DATA_PATH = "data/marketing_dataset.csv"
+OUTPUT_DIR = "outputs"
+PLOT_DIR = f"{OUTPUT_DIR}/plots"
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(PLOT_DIR, exist_ok=True)
 
 
+# ------------------ HELPER FUNCTIONS ------------------ #
 
 def safe_divide(numerator, denominator):
-    denom = denominator.replace(0, np.nan)
-    return numerator / denom
+    """Safely divide values avoiding division by zero."""
+    if hasattr(denominator, "replace"):
+        denominator = denominator.replace(0, np.nan)
+    denominator = np.where(denominator == 0, np.nan, denominator)
+    return numerator / denominator
 
 
 def print_section(title):
@@ -24,31 +35,29 @@ def print_section(title):
 
 
 def save_plot(filename):
-    """Save current plot to outputs/plots/ and close."""
-    os.makedirs("outputs/plots", exist_ok=True)
-    plt.savefig(f"outputs/plots/{filename}", bbox_inches="tight")
+    """Save current plot and close."""
+    plt.savefig(f"{PLOT_DIR}/{filename}", bbox_inches="tight")
     plt.close()
 
 
-# ---------- Section 1 ---------- #
+# ------------------ SECTION 1 ------------------ #
 
 def load_marketing_data():
-    path = "data/marketing_dataset.csv"
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"File not found: {path}")
-    return pd.read_csv(path)
+    if not os.path.exists(DATA_PATH):
+        raise FileNotFoundError(f"ERROR: Dataset not found at {DATA_PATH}")
+    return pd.read_csv(DATA_PATH)
 
 
 def show_basic_info(df):
-    print_section("SECTION 1: Basic Info")
+    print_section("SECTION 1: Basic Information")
     print("First 10 rows:\n", df.head(10))
-    print("\nShape:", df.shape)
-    print("\nSummary statistics:\n", df.describe())
+    print("\nShape (Rows, Columns):", df.shape)
+    print("\nSummary Statistics:\n", df.describe())
 
 
 def convert_and_sort_dates(df):
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    return df.sort_values("Date")
+    return df.sort_values("Date").reset_index(drop=True)
 
 
 def list_unique_values(df):
@@ -60,22 +69,22 @@ def list_unique_values(df):
 
 def filter_google_high_visitors(df):
     filtered = df[(df["Platform"] == "Google") & (df["Visitors"] > 10000)]
-    print("\nFiltered rows (Google + Visitors > 10k):\n", filtered.head())
+    print("\nGoogle rows with > 10k visitors:\n", filtered.head())
     return filtered
 
 
 def add_cpl_and_top_adsets(df):
     df["CPL"] = safe_divide(df["Spend"], df["Leads"])
-    adset_summary = df.groupby("Adset").agg(
-        Spend_sum=("Spend", "sum"),
-        Leads_sum=("Leads", "sum")
+    summary = df.groupby("Adset").agg(
+        Spend=("Spend", "sum"),
+        Leads=("Leads", "sum")
     ).reset_index()
-    adset_summary["CPL"] = safe_divide(adset_summary["Spend_sum"], adset_summary["Leads_sum"])
-    print("\nTop 5 expensive adsets:\n", adset_summary.sort_values("CPL", ascending=False).head(5))
+    summary["CPL"] = safe_divide(summary["Spend"], summary["Leads"])
+    print("\nTop 5 Most Expensive Adsets (CPL):\n", summary.sort_values("CPL", ascending=False).head())
     return df
 
 
-# ---------- Section 2 ---------- #
+# ------------------ SECTION 2 ------------------ #
 
 def platform_group_metrics(df):
     grouped = df.groupby("Platform").agg(
@@ -84,7 +93,9 @@ def platform_group_metrics(df):
         Total_Leads=("Leads", "sum"),
         Total_Closure=("Closure", "sum")
     ).reset_index()
+
     grouped["Avg_CPL"] = safe_divide(grouped["Total_Spend"], grouped["Total_Leads"])
+
     print_section("SECTION 2: Platform Metrics")
     print(grouped)
     return grouped
@@ -92,7 +103,8 @@ def platform_group_metrics(df):
 
 def project_highest_sitevisits(df):
     proj_visits = df.groupby("Project")["SiteVisits"].sum().reset_index()
-    print("\nProject with highest SiteVisits:\n", proj_visits.sort_values("SiteVisits", ascending=False).head(1))
+    print("\nProject with Highest SiteVisits:\n",
+          proj_visits.sort_values("SiteVisits", ascending=False).head(1))
 
 
 def plot_daily_spend_trend(df):
@@ -111,24 +123,28 @@ def add_funnel_metrics(df):
 
 def detect_anomalies(df):
     daily = df.groupby("Date").agg(Visitors=("Visitors", "sum"), Leads=("Leads", "sum")).reset_index()
+
     for col in ["Visitors", "Leads"]:
         mean, std = daily[col].mean(), daily[col].std()
         daily[f"{col}_zscore"] = (daily[col] - mean) / (std if std else np.nan)
+
     anomalies = daily[(daily["Visitors_zscore"].abs() > 2) | (daily["Leads_zscore"].abs() > 2)]
-    print("\nAnomalies:\n", anomalies)
+    print("\nDetected Anomalies:\n", anomalies)
 
 
-# ---------- Section 3 ---------- #
+# ------------------ SECTION 3 ------------------ #
 
 def best_adset_per_platform(df):
     grouped = df.groupby(["Platform", "Adset"])["Closure"].sum().reset_index()
     idx = grouped.groupby("Platform")["Closure"].idxmax()
-    print_section("SECTION 3: Best Adset per Platform")
+
+    print_section("Best Adset Per Platform (Highest Closure)")
     print(grouped.loc[idx])
 
 
 def correlation_heatmap(df):
     corr = df[["Spend", "Visitors", "Leads", "SiteVisits", "Closure"]].corr()
+
     sns.heatmap(corr, annot=True, cmap="coolwarm")
     plt.title("Correlation Heatmap")
     save_plot("correlation_heatmap.png")
@@ -142,23 +158,23 @@ def build_daily_dashboard(df):
         Total_SiteVisits=("SiteVisits", "sum"),
         Total_Closure=("Closure", "sum")
     ).reset_index()
-    os.makedirs("outputs", exist_ok=True)
-    dashboard.to_csv("outputs/daily_dashboard.csv", index=False)
-    print("\nSaved daily_dashboard.csv in outputs/")
+
+    dashboard.to_csv(f"{OUTPUT_DIR}/daily_dashboard.csv", index=False)
+    print("\nSaved daily_dashboard.csv to /outputs/")
     return dashboard
 
 
 def funnel_summary(df):
-    funnel = df.groupby("Project").agg(
+    summary = df.groupby("Project").agg(
         Visitors=("Visitors", "sum"),
         Leads=("Leads", "sum"),
         SiteVisits=("SiteVisits", "sum"),
         Closure=("Closure", "sum")
-    ).reset_index()
-    print("\nFunnel Summary:\n", funnel.head())
+    )
+    print("\nProject Funnel Summary:\n", summary)
 
 
-# ---------- Section 4 ---------- #
+# ------------------ SECTION 4 ------------------ #
 
 def plot_spend_vs_leads(df):
     sns.scatterplot(data=df, x="Spend", y="Leads", hue="Platform")
@@ -177,7 +193,7 @@ def plot_top3_visitors(df):
     top3 = df.groupby("Platform")["Visitors"].sum().nlargest(3).index
     daily = df[df["Platform"].isin(top3)].groupby(["Date", "Platform"])["Visitors"].sum().reset_index()
     sns.lineplot(data=daily, x="Date", y="Visitors", hue="Platform", marker="o")
-    plt.title("Daily Visitors (Top 3 Platforms)")
+    plt.title("Top 3 Platforms - Daily Visitors")
     save_plot("top3_visitors.png")
 
 
@@ -201,10 +217,11 @@ def platform_dashboard(df):
     save_plot("platform_dashboard.png")
 
 
-
+# ------------------ MAIN RUNNER ------------------ #
 
 def main():
     df = load_marketing_data()
+
     show_basic_info(df)
     df = convert_and_sort_dates(df)
     list_unique_values(df)
@@ -214,6 +231,7 @@ def main():
     platform_group_metrics(df)
     project_highest_sitevisits(df)
     plot_daily_spend_trend(df)
+
     df = add_funnel_metrics(df)
     detect_anomalies(df)
 
@@ -229,4 +247,6 @@ def main():
 
 
 if __name__ == "__main__":
+    print("\n📊 Running Marketing Data Analysis...\n")
     main()
+    print("\n✅ Analysis Completed. Check 'outputs/' folder for results.\n")
