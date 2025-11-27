@@ -1,0 +1,21 @@
+ProductID,ProductName,Category,Price
+101,Laptop,Electronics,60000
+102,Headphones,Electronics,2500
+103,Monitor,Electronics,12000
+104,Keyboard,Electronics,1500
+105,Mouse,Electronics,800
+106,Office Chair,Furniture,8000
+107,Coffee Table,Furniture,5500
+108,Desk Lamp,Home Decor,2200
+109,Router,Electronics,3000
+110,Webcam,Electronics,4000
+111,Refrigerator,Appliances,45000
+112,Microwave,Appliances,15000
+113,Washing Machine,Appliances,38000
+114,Air Conditioner,Appliances,52000
+115,Sofa,Furniture,25000
+116,Bookshelf,Furniture,9000
+117,Wall Clock,Home Decor,1800
+118,Curtains,Home Decor,3500
+119,Table Fan,Appliances,3000
+120,Smart TV,Electronics,55000
